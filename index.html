@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Private Chat Viewer</title>
+    <style>
+        /* --- 1. CSS STYLES --- */
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; height: 100vh; overflow: hidden; background: #fff; }
+        
+        /* Sidebar */
+        #sidebar { width: 320px; background: #f7f7f7; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .search-box-container { padding: 10px; border-bottom: 1px solid #ddd; background: #f7f7f7; }
+        input.search-input { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; outline: none; display: block; margin: 0 auto; }
+        
+        #convo-list { overflow-y: auto; flex: 1; }
+        .convo-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; background: white; transition: background 0.2s; }
+        .convo-item:hover { background: #eaeaea; }
+        .convo-item.active { background: #d0e6ff; border-left: 4px solid #0084ff; font-weight: 600; }
+
+        /* Main Chat Area */
+        #chat-area { flex: 1; display: flex; flex-direction: column; background: #fff; }
+        
+        /* Header */
+        #chat-header { padding: 15px; border-bottom: 1px solid #ddd; background: #f7f7f7; display: flex; justify-content: space-between; align-items: center; height: 50px;}
+        #chat-title { font-weight: bold; font-size: 1.1em; }
+        
+        /* Messages */
+        #messages { flex: 1; padding: 20px; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 8px; }
+        
+        /* Message Bubbles */
+        .msg { max-width: 75%; padding: 10px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; position: relative; word-wrap: break-word; }
+        .msg.me { align-self: flex-end; background: #0084ff; color: white; border-bottom-right-radius: 4px; }
+        .msg.them { align-self: flex-start; background: #e4e6eb; color: black; border-bottom-left-radius: 4px; }
+        .timestamp { font-size: 11px; opacity: 0.7; margin-top: 4px; display: block; text-align: right; }
+        
+        /* Upload Overlay */
+        #uploader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; }
+        .upload-box { background: #333; padding: 40px; border-radius: 10px; text-align: center; }
+        input[type="file"] { margin-top: 20px; padding: 10px; background: white; color: black; border-radius: 5px; cursor: pointer; }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="uploader">
+        <div class="upload-box">
+            <h1>Private Hangout Reader</h1>
+            <p>Select your <code>hangout.json</code> file to begin.</p>
+            <p style="font-size: 0.8em; color: #aaa;">Data is processed locally in your browser.</p>
+            <input type="file" id="fileInput" accept=".json">
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="search-box-container">
+            <input type="text" id="contactSearch" class="search-input" placeholder="Search contacts...">
+        </div>
+        <div id="convo-list"></div>
+    </div>
+
+    <div id="chat-area">
+        <div id="chat-header">
+            <span id="chat-title">Select a chat</span>
+            <input type="text" id="msgSearch" class="search-input" style="width: 200px; margin: 0;" placeholder="Find in chat..." disabled>
+        </div>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+        
+        let allConversations = []; // Store raw data reference
+        let currentChatEvents = []; // Store current chat messages
+
+        // 1. Handle File Upload
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const json = JSON.parse(event.target.result);
+                    // Handle structure variations
+                    const data = json.conversations || json.conversation_state || [];
+                    processData(data);
+                    document.getElementById('uploader').style.display = 'none';
+                } catch (err) {
+                    alert("Error reading JSON: " + err);
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // 2. Process Data & Populate Sidebar
+        function processData(conversations) {
+            const listContainer = document.getElementById('convo-list');
+            listContainer.innerHTML = '';
+            
+            // Map data to a cleaner format for searching
+            allConversations = conversations.map((convo, index) => {
+                const convoDetails = convo.conversation || (convo.conversation_state ? convo.conversation_state.conversation : {});
+                const participants = convoDetails.participant_data || [];
+                
+                let names = participants
+                    .filter(p => !p.id.gaia_id.includes('user_id')) 
+                    .map(p => p.fallback_name || "Unknown")
+                    .join(", ");
+                
+                if (!names) names = "Group Chat / Unknown";
+                
+                return {
+                    id: index,
+                    name: names,
+                    data: convo
+                };
+            });
+
+            renderSidebar(allConversations);
+        }
+
+        // 3. Render Sidebar (supports filtering)
+        function renderSidebar(items) {
+            const listContainer = document.getElementById('convo-list');
+            listContainer.innerHTML = '';
+
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'convo-item';
+                div.textContent = item.name;
+                div.onclick = () => loadChat(item);
+                listContainer.appendChild(div);
+            });
+        }
+
+        // 4. Load Specific Chat
+        function loadChat(item) {
+            // UI Updates
+            document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+            // Find the clicked element by text (simplistic) or re-render. 
+            // For simplicity in this logic, we just visually reset.
+            
+            document.getElementById('chat-title').textContent = item.name;
+            document.getElementById('msgSearch').disabled = false;
+            document.getElementById('msgSearch').value = ''; // Reset search
+            
+            const msgContainer = document.getElementById('messages');
+            msgContainer.innerHTML = ''; 
+
+            const convo = item.data;
+            let events = convo.events || (convo.conversation_state ? convo.conversation_state.event : []) || [];
+            
+            // Sort events
+            events.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            currentChatEvents = events; // Save for filtering
+
+            renderMessages(events);
+        }
+
+        // 5. Render Messages
+        function renderMessages(events) {
+            const msgContainer = document.getElementById('messages');
+            msgContainer.innerHTML = '';
+
+            events.forEach(event => {
+                if (event.chat_message && event.chat_message.message_content) {
+                    const content = event.chat_message.message_content;
+                    let text = "";
+                    
+                    if (content.segment) {
+                        content.segment.forEach(seg => {
+                            if (seg.text) text += seg.text;
+                        });
+                    }
+                    // Handle attachments (images) roughly if needed
+                    if (content.attachment && content.attachment.length > 0) {
+                        text += " [Image/Attachment]";
+                    }
+
+                    if (text) {
+                        const bubble = document.createElement('div');
+                        const isMe = event.sender_id.gaia_id === event.self_event_state.user_id.gaia_id; 
+                        
+                        bubble.className = `msg ${isMe ? 'me' : 'them'}`;
+                        
+                        // Timestamp
+                        const date = new Date(parseInt(event.timestamp) / 1000);
+                        const timeStr = date.toLocaleString();
+
+                        // Store text in attribute for easy search
+                        bubble.setAttribute('data-text', text.toLowerCase());
+                        
+                        bubble.innerHTML = `${text} <span class="timestamp">${timeStr}</span>`;
+                        msgContainer.appendChild(bubble);
+                    }
+                }
+            });
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+
+        // --- SEARCH FUNCTIONALITY ---
+
+        // A. Sidebar Search Listener
+        document.getElementById('contactSearch').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = allConversations.filter(c => c.name.toLowerCase().includes(term));
+            renderSidebar(filtered);
+        });
+
+        // B. Message Search Listener
+        document.getElementById('msgSearch').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const bubbles = document.querySelectorAll('.msg');
+            
+            bubbles.forEach(b => {
+                const text = b.getAttribute('data-text');
+                if (text.includes(term)) {
+                    b.style.display = 'block';
+                } else {
+                    b.style.display = 'none';
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
