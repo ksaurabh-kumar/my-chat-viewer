@@ -2,265 +2,243 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>My Private Chat Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat History Viewer (Start from Beginning)</title>
     <style>
-        /* --- 1. CSS STYLES --- */
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; height: 100vh; overflow: hidden; background: #fff; }
-        
-        /* Sidebar */
-        #sidebar { width: 320px; background: #f7f7f7; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
-        .search-box-container { padding: 10px; border-bottom: 1px solid #ddd; background: #f7f7f7; }
-        input.search-input { width: 90%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; outline: none; display: block; margin: 0 auto; }
-        
-        #convo-list { overflow-y: auto; flex: 1; }
-        .convo-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; background: white; transition: background 0.2s; }
-        .convo-item:hover { background: #eaeaea; }
-        .convo-item.active { background: #d0e6ff; border-left: 4px solid #0084ff; font-weight: 600; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
 
-        /* Main Chat Area */
-        #chat-area { flex: 1; display: flex; flex-direction: column; background: #fff; }
-        
-        /* Header */
-        #chat-header { padding: 15px; border-bottom: 1px solid #ddd; background: #f7f7f7; display: flex; justify-content: space-between; align-items: center; height: 50px;}
-        #chat-title { font-weight: bold; font-size: 1.1em; }
-        
-        /* Messages */
-        #messages { flex: 1; padding: 20px; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 8px; }
-        
-        /* Message Bubbles */
-        .msg { max-width: 75%; padding: 10px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; position: relative; word-wrap: break-word; }
-        .msg.me { align-self: flex-end; background: #0084ff; color: white; border-bottom-right-radius: 4px; }
-        .msg.them { align-self: flex-start; background: #e4e6eb; color: black; border-bottom-left-radius: 4px; }
-        .timestamp { font-size: 11px; opacity: 0.7; margin-top: 4px; display: block; text-align: right; }
-        
-        /* Upload Overlay */
-        #uploader { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; }
-        .upload-box { background: #333; padding: 40px; border-radius: 10px; text-align: center; }
-        input[type="file"] { margin-top: 20px; padding: 10px; background: white; color: black; border-radius: 5px; cursor: pointer; }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
 
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+        h1 { text-align: center; color: #444; }
+
+        /* File Input Styling */
+        .upload-area {
+            text-align: center;
+            padding: 40px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .upload-area:hover { background-color: #f9f9f9; border-color: #999; }
+        
+        /* Chat Styling */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            line-height: 1.5;
+            position: relative;
+        }
+
+        .role-user {
+            align-self: flex-end;
+            background-color: #007bff;
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        .role-assistant {
+            align-self: flex-start;
+            background-color: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 2px;
+        }
+
+        .role-system {
+            align-self: center;
+            background-color: #ffeba7;
+            color: #555;
+            font-size: 0.9em;
+            text-align: center;
+        }
+
+        .timestamp {
+            font-size: 0.75em;
+            margin-top: 5px;
+            opacity: 0.7;
+            text-align: right;
+        }
+
+        /* Load More Button */
+        #loadMoreBtn {
+            display: none;
+            width: 100%;
+            padding: 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #loadMoreBtn:hover { background-color: #218838; }
+
+        /* Error/Status messages */
+        #status { text-align: center; margin: 10px 0; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <div id="uploader">
-        <div class="upload-box">
-            <h1>Private Hangout Reader</h1>
-            <p>Select your <code>hangout.json</code> file to begin.</p>
-            <p style="font-size: 0.8em; color: #aaa;">Data is processed locally in your browser.</p>
-            <input type="file" id="fileInput" accept=".json">
-        </div>
+<div class="container">
+    <h1>Chat History Viewer</h1>
+    
+    <div class="upload-area">
+        <input type="file" id="fileInput" accept=".json">
+        <p>Click to upload your <strong>conversations.json</strong> file</p>
     </div>
 
-    <div id="sidebar">
-        <div class="search-box-container">
-            <input type="text" id="contactSearch" class="search-input" placeholder="Search contacts...">
-        </div>
-        <div id="convo-list"></div>
-    </div>
+    <div id="status"></div>
+    <div id="chatContainer" class="chat-container"></div>
+    <button id="loadMoreBtn">Load Next 50 Messages</button>
+</div>
 
-    <div id="chat-area">
-        <div id="chat-header">
-            <span id="chat-title">Select a chat</span>
-            <input type="text" id="msgSearch" class="search-input" style="width: 200px; margin: 0;" placeholder="Find in chat..." disabled>
-        </div>
-        <div id="messages"></div>
-    </div>
+<script>
+    let fullConversationData = [];
+    let currentIndex = 0;
+    const BATCH_SIZE = 50; // Number of messages to load at a time
 
-    <script>
-        // --- JAVASCRIPT LOGIC ---
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        const statusDiv = document.getElementById('status');
         
-        let allConversations = []; // Store raw data reference
-        let currentChatEvents = []; // Store current chat messages
-
-        // 1. Handle File Upload
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const json = JSON.parse(event.target.result);
-                    // Handle structure variations
-                    const data = json.conversations || json.conversation_state || [];
-                    processData(data);
-                    document.getElementById('uploader').style.display = 'none';
-                } catch (err) {
-                    alert("Error reading JSON: " + err);
+        statusDiv.textContent = "Reading file... (This may take a moment for large files)";
+        
+        reader.onload = function(e) {
+            try {
+                statusDiv.textContent = "Parsing JSON...";
+                const json = JSON.parse(e.target.result);
+                
+                // DATA HANDLING:
+                // Different exports have different structures. We try to find the array.
+                if (Array.isArray(json)) {
+                    fullConversationData = json;
+                } else if (json.mapping) {
+                    // Handle standard ChatGPT structure (linked list to array)
+                    fullConversationData = convertMappingToArray(json.mapping);
+                } else if (json.events) {
+                    // Handle certain customized JSON exports
+                    fullConversationData = json.events;
+                } else {
+                    throw new Error("Could not find a recognized list of messages.");
                 }
-            };
-            reader.readAsText(file);
-        });
 
-        // 2. Process Data & Populate Sidebar
-        function processData(conversations) {
-            const listContainer = document.getElementById('convo-list');
-            listContainer.innerHTML = '';
-            
-            // Map data to a cleaner format for searching
-            allConversations = conversations.map((convo, index) => {
-                const convoDetails = convo.conversation || (convo.conversation_state ? convo.conversation_state.conversation : {});
-                const participants = convoDetails.participant_data || [];
-                
-                let names = participants
-                    .filter(p => !p.id.gaia_id.includes('user_id')) 
-                    .map(p => p.fallback_name || "Unknown")
-                    .join(", ");
-                
-                if (!names) names = "Group Chat / Unknown";
-                
-                return {
-                    id: index,
-                    name: names,
-                    data: convo
-                };
-            });
+                // SUCCESS:
+                statusDiv.textContent = `Loaded ${fullConversationData.length} messages. Showing start of conversation.`;
+                document.querySelector('.upload-area').style.display = 'none';
+                document.getElementById('loadMoreBtn').style.display = 'block';
 
-            renderSidebar(allConversations);
-        }
+                // RENDER FIRST BATCH (Start from Beginning)
+                renderBatch();
 
-        // 3. Render Sidebar (supports filtering)
-        function renderSidebar(items) {
-            const listContainer = document.getElementById('convo-list');
-            listContainer.innerHTML = '';
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = "Error: " + err.message;
+                statusDiv.style.color = "red";
+            }
+        };
+        
+        reader.readAsText(file);
+    });
 
-            items.forEach(item => {
-                const div = document.createElement('div');
-                div.className = 'convo-item';
-                div.textContent = item.name;
-                div.onclick = () => loadChat(item);
-                listContainer.appendChild(div);
-            });
-        }
+    document.getElementById('loadMoreBtn').addEventListener('click', renderBatch);
 
-        // 4. Load Specific Chat (Updated for color fix)
-        function loadChat(item) {
-            // UI Updates
-            document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
-            // Visual highlight logic (omitted for brevity, existing css handles it via class)
-            
-            document.getElementById('chat-title').textContent = item.name;
-            document.getElementById('msgSearch').disabled = false;
-            document.getElementById('msgSearch').value = ''; 
-            
-            const msgContainer = document.getElementById('messages');
-            msgContainer.innerHTML = ''; 
+    function renderBatch() {
+        const container = document.getElementById('chatContainer');
+        const endIndex = Math.min(currentIndex + BATCH_SIZE, fullConversationData.length);
+        
+        // Slice the array from CURRENT position forward (Start -> End)
+        const batch = fullConversationData.slice(currentIndex, endIndex);
 
-            const convo = item.data;
-            const convoDetails = convo.conversation || (convo.conversation_state ? convo.conversation_state.conversation : {});
-            
-            // --- NEW: Identify the "Other" person's ID ---
-            // In a 1-on-1 chat, we find the participant who has a name.
-            const participants = convoDetails.participant_data || [];
-            let otherPersonId = null;
+        batch.forEach(msg => {
+            // Adapt to different JSON formats
+            let role = 'user';
+            let content = '';
+            let time = '';
 
-            // Try to find the participant that isn't us
-            for (let p of participants) {
-                // If this participant has a name and it matches the chat title, it's likely them.
-                // Or if there are only 2 people, we just grab the one that isn't "me" (if we knew me).
-                // reliable fallback: Grab the first ID that has a fallback_name
-                if (p.fallback_name) {
-                    otherPersonId = p.id.gaia_id;
-                    break; 
-                }
+            // 1. Format: Direct array of objects
+            if (msg.role && msg.content) {
+                role = msg.role;
+                content = msg.content;
+                time = msg.create_time ? new Date(msg.create_time * 1000).toLocaleString() : '';
+            }
+            // 2. Format: ChatGPT "Mapping" node
+            else if (msg.message) {
+                role = msg.message.author.role;
+                content = msg.message.content.parts ? msg.message.content.parts.join('') : '';
+                time = msg.message.create_time ? new Date(msg.message.create_time * 1000).toLocaleString() : '';
             }
 
-            let events = convo.events || (convo.conversation_state ? convo.conversation_state.event : []) || [];
-            
-            // Sort events
-            events.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            currentChatEvents = events; 
+            if(content) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `message role-${role}`;
+                
+                // Simple Text Rendering (escapes HTML to prevent injection)
+                // If you want markdown support, you'd need a library like marked.js
+                msgDiv.innerText = content; 
 
-            // Pass the identified "Other ID" to the render function
-            renderMessages(events, otherPersonId);
-        }
-
-        // 5. Render Messages (Updated logic)
-        function renderMessages(events, otherPersonId) {
-            const msgContainer = document.getElementById('messages');
-            msgContainer.innerHTML = '';
-
-            events.forEach(event => {
-                if (event.chat_message && event.chat_message.message_content) {
-                    const content = event.chat_message.message_content;
-                    let text = "";
-                    
-                    if (content.segment) {
-                        content.segment.forEach(seg => {
-                            if (seg.text) text += seg.text;
-                        });
-                    }
-                    if (content.attachment && content.attachment.length > 0) {
-                        text += " [Image/Attachment]";
-                    }
-
-                    if (text) {
-                        const bubble = document.createElement('div');
-                        
-                        // --- NEW LOGIC: "Me" vs "Them" ---
-                        const senderId = event.sender_id.gaia_id;
-                        let isMe = false;
-
-                        // Method A: Standard check (works for small chats)
-                        if (event.self_event_state && event.self_event_state.user_id) {
-                            isMe = (senderId === event.self_event_state.user_id.gaia_id);
-                        }
-                        
-                        // Method B: Fallback for large chats (Exclusion Method)
-                        // If the sender is NOT the "Other Person" we identified earlier, it must be Me.
-                        if (otherPersonId) {
-                            if (senderId !== otherPersonId) {
-                                isMe = true;
-                            } else {
-                                isMe = false;
-                            }
-                        }
-
-                        bubble.className = `msg ${isMe ? 'me' : 'them'}`;
-                        
-                        // Timestamp
-                        const date = new Date(parseInt(event.timestamp) / 1000);
-                        const timeStr = date.toLocaleString();
-
-                        bubble.setAttribute('data-text', text.toLowerCase());
-                        
-                        bubble.innerHTML = `${text} <span class="timestamp">${timeStr}</span>`;
-                        msgContainer.appendChild(bubble);
-                    }
+                if (time) {
+                    const timeDiv = document.createElement('div');
+                    timeDiv.className = 'timestamp';
+                    timeDiv.innerText = time;
+                    msgDiv.appendChild(timeDiv);
                 }
-            });
-            msgContainer.scrollTop = msgContainer.scrollHeight;
-        }
 
-        // --- SEARCH FUNCTIONALITY ---
-
-        // A. Sidebar Search Listener
-        document.getElementById('contactSearch').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const filtered = allConversations.filter(c => c.name.toLowerCase().includes(term));
-            renderSidebar(filtered);
+                container.appendChild(msgDiv);
+            }
         });
 
-        // B. Message Search Listener
-        document.getElementById('msgSearch').addEventListener('input', (e) => {
-            const term = e.target.value.toLowerCase();
-            const bubbles = document.querySelectorAll('.msg');
-            
-            bubbles.forEach(b => {
-                const text = b.getAttribute('data-text');
-                if (text.includes(term)) {
-                    b.style.display = 'block';
-                } else {
-                    b.style.display = 'none';
-                }
-            });
-        });
+        currentIndex = endIndex;
 
-    </script>
+        if (currentIndex >= fullConversationData.length) {
+            document.getElementById('loadMoreBtn').style.display = 'none';
+            document.getElementById('status').textContent = "End of conversation reached.";
+        }
+    }
+
+    // Helper for complex ChatGPT structure (Mapping/Node ID)
+    function convertMappingToArray(mapping) {
+        let arr = [];
+        // This is a simplified linearizer. 
+        // Real ChatGPT trees branch, but we just grab all valid message nodes for simplicity.
+        Object.keys(mapping).forEach(key => {
+            const node = mapping[key];
+            if (node.message && node.message.content && node.message.content.parts && node.message.content.parts.length > 0) {
+                // Only add if text exists
+                if (node.message.content.parts[0] !== "") {
+                    arr.push(node);
+                }
+            }
+        });
+        // Sort by time
+        arr.sort((a, b) => a.message.create_time - b.message.create_time);
+        return arr;
+    }
+</script>
+
 </body>
 </html>
