@@ -138,32 +138,50 @@
             });
         }
 
-        // 4. Load Specific Chat
+        // 4. Load Specific Chat (Updated for color fix)
         function loadChat(item) {
             // UI Updates
             document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
-            // Find the clicked element by text (simplistic) or re-render. 
-            // For simplicity in this logic, we just visually reset.
+            // Visual highlight logic (omitted for brevity, existing css handles it via class)
             
             document.getElementById('chat-title').textContent = item.name;
             document.getElementById('msgSearch').disabled = false;
-            document.getElementById('msgSearch').value = ''; // Reset search
+            document.getElementById('msgSearch').value = ''; 
             
             const msgContainer = document.getElementById('messages');
             msgContainer.innerHTML = ''; 
 
             const convo = item.data;
+            const convoDetails = convo.conversation || (convo.conversation_state ? convo.conversation_state.conversation : {});
+            
+            // --- NEW: Identify the "Other" person's ID ---
+            // In a 1-on-1 chat, we find the participant who has a name.
+            const participants = convoDetails.participant_data || [];
+            let otherPersonId = null;
+
+            // Try to find the participant that isn't us
+            for (let p of participants) {
+                // If this participant has a name and it matches the chat title, it's likely them.
+                // Or if there are only 2 people, we just grab the one that isn't "me" (if we knew me).
+                // reliable fallback: Grab the first ID that has a fallback_name
+                if (p.fallback_name) {
+                    otherPersonId = p.id.gaia_id;
+                    break; 
+                }
+            }
+
             let events = convo.events || (convo.conversation_state ? convo.conversation_state.event : []) || [];
             
             // Sort events
             events.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-            currentChatEvents = events; // Save for filtering
+            currentChatEvents = events; 
 
-            renderMessages(events);
+            // Pass the identified "Other ID" to the render function
+            renderMessages(events, otherPersonId);
         }
 
-        // 5. Render Messages
-        function renderMessages(events) {
+        // 5. Render Messages (Updated logic)
+        function renderMessages(events, otherPersonId) {
             const msgContainer = document.getElementById('messages');
             msgContainer.innerHTML = '';
 
@@ -177,22 +195,38 @@
                             if (seg.text) text += seg.text;
                         });
                     }
-                    // Handle attachments (images) roughly if needed
                     if (content.attachment && content.attachment.length > 0) {
                         text += " [Image/Attachment]";
                     }
 
                     if (text) {
                         const bubble = document.createElement('div');
-                        const isMe = event.sender_id.gaia_id === event.self_event_state.user_id.gaia_id; 
                         
+                        // --- NEW LOGIC: "Me" vs "Them" ---
+                        const senderId = event.sender_id.gaia_id;
+                        let isMe = false;
+
+                        // Method A: Standard check (works for small chats)
+                        if (event.self_event_state && event.self_event_state.user_id) {
+                            isMe = (senderId === event.self_event_state.user_id.gaia_id);
+                        }
+                        
+                        // Method B: Fallback for large chats (Exclusion Method)
+                        // If the sender is NOT the "Other Person" we identified earlier, it must be Me.
+                        if (otherPersonId) {
+                            if (senderId !== otherPersonId) {
+                                isMe = true;
+                            } else {
+                                isMe = false;
+                            }
+                        }
+
                         bubble.className = `msg ${isMe ? 'me' : 'them'}`;
                         
                         // Timestamp
                         const date = new Date(parseInt(event.timestamp) / 1000);
                         const timeStr = date.toLocaleString();
 
-                        // Store text in attribute for easy search
                         bubble.setAttribute('data-text', text.toLowerCase());
                         
                         bubble.innerHTML = `${text} <span class="timestamp">${timeStr}</span>`;
